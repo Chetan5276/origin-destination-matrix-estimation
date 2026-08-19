@@ -1,0 +1,237 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{Synthetic OD Matrix Generation:\\Problem Statement and Constraints}
+\author{OD Estimation Project}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note states the problem of generating realistic Origin--Destination (OD) matrices from first principles for machine-learning training. It specifies inputs and outputs, hard and soft transportation constraints, desired statistical properties, and the requirement that samples lie on a low-dimensional latent manifold rather than filling the full $N^2$-dimensional space uniformly.
+\end{abstract}
+
+\section{Problem Statement}
+
+\subsection{Objective}
+
+Develop a statistical generator capable of producing an arbitrary number of realistic Origin--Destination (OD) matrices for a transportation network.
+
+Each generated OD matrix should satisfy fundamental transportation principles and network constraints while exhibiting sufficient variability to serve as high-quality training data for machine learning models.
+
+Unlike traditional approaches that perturb an existing OD matrix, the proposed generator should synthesize OD demand \textbf{from first principles}, producing diverse yet realistic travel demand patterns.
+
+\subsection{Inputs}
+
+The generator requires only:
+
+\begin{itemize}
+    \item Transportation Analysis Zones (TAZs)
+    \item Pairwise distance (or travel cost/time) matrix
+    \item Desired total number of trips
+    \item Number of OD matrices to generate
+\end{itemize}
+
+No historical OD matrix is required.
+
+\subsection{Output}
+
+Generate
+\[
+\{T^{(1)},T^{(2)},\ldots,T^{(K)}\}
+\]
+where
+\[
+T^{(k)}\in\mathbb{R}^{N\times N}
+\]
+is a valid OD matrix.
+
+\section{Constraints}
+
+\subsection{Non-negativity}
+
+Every OD flow represents trips. Therefore,
+\[
+T_{ij}\ge 0.
+\]
+
+\subsection{No Intrazonal Trips (Optional)}
+
+If intrazonal trips are excluded,
+\[
+T_{ii}=0.
+\]
+Otherwise, they may be permitted.
+
+\subsection{Fixed Total Demand}
+
+Every generated matrix should represent the same total daily travel demand:
+\[
+\sum_{i,j}T_{ij}=G,
+\]
+where $G$ is a user-specified constant.
+
+\subsection{Production--Attraction Consistency}
+
+The total number of productions must equal the total number of attractions:
+\[
+\sum_i P_i = \sum_j A_j = G,
+\]
+where
+\[
+P_i=\sum_j T_{ij}, \qquad A_j=\sum_i T_{ij}.
+\]
+If production and attraction vectors are prescribed, every generated matrix must satisfy them exactly. Otherwise, these vectors are generated as part of the synthesis process.
+
+\subsection{Distance Decay}
+
+Trips generally decrease with increasing spatial separation between origin and destination. For two OD pairs with
+\[
+d_{ij}>d_{mn},
+\]
+the expected flow should satisfy
+\[
+\mathbb{E}[T_{ij}]<\mathbb{E}[T_{mn}].
+\]
+However, this is \textbf{not} a hard constraint. Long-distance trips must still occur with non-zero probability. Thus,
+\[
+T_{ij}\propto f(d_{ij}),
+\]
+where $f(d)$ is a monotonically decreasing function such as
+\begin{itemize}
+    \item exponential decay,
+    \item power-law decay,
+    \item logistic decay,
+    \item gravity-based decay.
+\end{itemize}
+The distance decay should be interpreted statistically rather than deterministically. While nearby zones generally exchange more trips, some long-distance OD pairs should still exhibit high demand due to latent socioeconomic or transportation factors.
+
+\subsection{Random Corridor Dominance}
+
+Each generated OD matrix should exhibit a unique set of dominant travel corridors. Specifically:
+\begin{itemize}
+    \item A small fraction of OD pairs should carry very high demand.
+    \item Most OD pairs should carry moderate demand.
+    \item Many OD pairs should carry low demand.
+\end{itemize}
+The identity of these dominant corridors should vary from one generated matrix to another. The generator must therefore avoid repeatedly producing the same dominant OD pairs.
+
+\subsection{Heavy-Tailed Flow Distribution}
+
+Cell values should approximately follow a heavy-tailed distribution. Consequently:
+\begin{itemize}
+    \item Most OD pairs should carry small demand.
+    \item A few OD pairs should carry very large demand.
+\end{itemize}
+This reproduces empirical transportation demand patterns observed in real road networks.
+
+\subsection{Approximate Reciprocity (Symmetry)}
+
+Daily travel demand often exhibits reciprocal movement. Therefore,
+\[
+T_{ij}\approx T_{ji}.
+\]
+Exact equality is unnecessary. The generator should preserve only statistical symmetry while allowing directional imbalances.
+
+\subsection{Spatial Coherence}
+
+Nearby OD pairs should exhibit correlated behavior. If one OD pair forms a major travel corridor, neighboring origins or destinations should have an increased probability of generating similar travel demand. Demand should therefore appear spatially coherent rather than as isolated random spikes.
+
+\subsection{Smooth Origin and Destination Importance}
+
+Each origin possesses a production strength. Each destination possesses an attraction strength. Zones with larger production strengths tend to generate more trips; zones with larger attraction strengths tend to receive more trips. These strengths should vary across generated matrices.
+
+\subsection{Diversity}
+
+Generated matrices should not be nearly identical. For two generated matrices $T^{(a)}$ and $T^{(b)}$, require
+\[
+\|T^{(a)}-T^{(b)}\|_F>\tau,
+\]
+where $\tau$ is a predefined diversity threshold.
+
+\subsection{Entropy}
+
+The generator should maximize dataset diversity while maintaining transportation realism. Different OD cells should experience varying demand distributions across the generated dataset.
+
+\subsection{Sparsity}
+
+Depending on the intended application, many OD pairs should contain zero, negligible, or low flow. Completely dense OD matrices are generally unrealistic.
+
+\subsection{Network Connectivity}
+
+Trips may only be assigned between connected origin--destination pairs. The generator should never allocate demand to disconnected zones.
+
+\subsection{Statistical Stationarity}
+
+All generated matrices should originate from the same underlying stochastic process. No generated matrix should be an obvious statistical outlier unless explicitly requested.
+
+\subsection{Scalability}
+
+The generator should efficiently produce $10^6$ or more synthetic OD matrices without significant computational overhead.
+
+\section{Desired Statistical Properties}
+
+Across the generated dataset, the following properties should hold:
+
+\begin{itemize}
+    \item Constant total demand.
+    \item Realistic production distributions.
+    \item Realistic attraction distributions.
+    \item Heavy-tailed OD flow distribution.
+    \item Distance-decay behavior.
+    \item Approximate reciprocity.
+    \item High entropy.
+    \item High pairwise diversity.
+    \item Spatial coherence.
+    \item Stable marginal statistics.
+    \item No duplicate matrices.
+    \item Realistic trip-length distribution.
+    \item Controllable randomness through a small number of interpretable parameters.
+\end{itemize}
+
+\section{Additional Constraint: Low-Dimensional Latent Structure}
+
+Real-world OD matrices are not arbitrary. Instead, they are governed by a relatively small number of latent factors such as
+\begin{itemize}
+    \item residential population,
+    \item employment,
+    \item commercial centers,
+    \item educational institutions,
+    \item industrial zones,
+    \item recreational areas,
+    \item accessibility,
+    \item socioeconomic characteristics.
+\end{itemize}
+Consequently, although an $N\times N$ OD matrix contains $N^2$ entries, its effective dimensionality is considerably smaller.
+
+A realistic generator should therefore produce OD matrices that lie on a low-dimensional manifold rather than uniformly occupying the entire $N^2$-dimensional space. This property explains why dimensionality reduction techniques such as Principal Component Analysis (PCA) and Autoencoders can effectively compress OD matrices while preserving most of their information.
+
+\section{Overall Problem Definition}
+
+Design a constrained probabilistic generator capable of sampling realistic Origin--Destination matrices from a transportation-aware probability distribution defined by
+\begin{itemize}
+    \item network topology,
+    \item distance-decay effects,
+    \item production--attraction consistency,
+    \item spatial coherence,
+    \item approximate reciprocity,
+    \item heavy-tailed corridor demand,
+    \item dataset diversity,
+    \item scalability.
+\end{itemize}
+The generated matrices should satisfy transportation constraints while remaining statistically diverse, physically plausible, and suitable for large-scale machine learning applications.
+
+\end{document}

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "origin-destination-matrix-estimation"
+version = "0.1.0"
+description = "Synthetic OD generation, turning-count assignment, and OD matrix estimation for Sioux Falls"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Chetan" }]
+keywords = ["origin-destination", "traffic", "sumo", "od-estimation"]
+dependencies = [
+    "numpy>=1.21",
+    "scipy>=1.9",
+    "pandas>=1.3",
+    "matplotlib>=3.5",
+    "seaborn>=0.12",
+    "networkx>=2.6",
+    "scikit-learn>=1.0",
+    "torch>=1.10",
+    "tqdm>=4.64",
+    "shap>=0.41",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ipykernel>=6.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.egg
+
+# Notebooks
+.ipynb_checkpoints/
+
+# IDE / Jupyter
+.idea/
+.vscode/
+.jupyter/
+
+# Logs & caches
+logs/
+*.log
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# LaTeX build artifacts
+docs/*.aux
+docs/*.out
+docs/*.toc
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz
+*.tex.bak
+
+# OS / editor locks
+.DS_Store
+Thumbs.db
+.~lock.*
+
+# Generated datasets and model artifacts (kept locally; not in git)
+*.npy
+!EstimatedODMatrix.npy
+*.pkl
+*.pt
+*.pth
+*.ckpt
+*.h5
+outputs/**/*.npy
+outputs/**/*.pkl
+outputs/ml_neural/models/
+outputs/ml_neural/figures/
+outputs/od_generator/figures/

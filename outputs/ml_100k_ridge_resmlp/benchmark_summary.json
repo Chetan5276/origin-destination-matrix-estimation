@@ -1,0 +1,86 @@
+{
+  "config": {
+    "seed": 42,
+    "train_frac": 0.8,
+    "val_frac": 0.1,
+    "test_frac": 0.1,
+    "max_samples": 50000,
+    "standardize_x": true,
+    "standardize_y": true,
+    "cv_folds": 3,
+    "n_jobs": -1,
+    "use_clean_turning": true
+  },
+  "neural_config": {
+    "hidden": [
+      512,
+      1024
+    ],
+    "num_res_blocks": 1,
+    "latent_hidden": [
+      256,
+      128
+    ],
+    "activation": "gelu",
+    "lr": 0.001,
+    "finetune_lr": 0.0001,
+    "epochs": 40,
+    "autoencoder_epochs": 40,
+    "finetune_epochs": 15,
+    "batch_size": 256,
+    "weight_decay": 1e-05,
+    "od_loss_weight": 1.0,
+    "forward_weight": 0.5,
+    "production_weight": 0.1,
+    "attraction_weight": 0.1,
+    "latent_dims": [
+      32,
+      64
+    ],
+    "residual_learning": false,
+    "enforce_sparsity_mask": true,
+    "output_activation": "softplus"
+  },
+  "data": {
+    "od": "outputs/od_generator_100k/synthetic_od_100k.npy",
+    "turning": "outputs/turning_counts_100k/turning_counts.npy",
+    "n_pool": 100000,
+    "max_samples": 50000,
+    "x_shape": [
+      50000,
+      178
+    ],
+    "y_shape": [
+      50000,
+      576
+    ]
+  },
+  "best_model": "residual_mlp_1blk",
+  "best_mae": 434.93420110232535,
+  "leaderboard": [
+    {
+      "mae": 434.93420110232535,
+      "rmse": 781.7900199543666,
+      "mape": 71243533.8170017,
+      "r2": 0.42005344685316204,
+      "frobenius": 781.790019954367,
+      "production_mae": 246.96860257068684,
+      "attraction_mae": 248.5003734367026,
+      "correlation": 0.8430981983606948,
+      "forward_rmse": 194.3255321523328,
+      "model": "residual_mlp_1blk"
+    },
+    {
+      "mae": 483.46107978863307,
+      "rmse": 871.3330467308314,
+      "mape": 74552539.50311078,
+      "r2": 0.3843485106119459,
+      "frobenius": 871.3330467308319,
+      "production_mae": 693.0200843001998,
+      "attraction_mae": 693.0200503643042,
+      "correlation": 0.8014877837989164,
+      "forward_rmse": 306.2409624087367,
+      "model": "ridge"
+    }
+  ]
+}

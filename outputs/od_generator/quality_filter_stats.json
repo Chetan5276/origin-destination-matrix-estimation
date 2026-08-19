@@ -1,0 +1,14 @@
+{
+  "n_candidates": 250,
+  "n_accepted": 50,
+  "n_rejected_sparsity": 0,
+  "n_rejected_correlation": 0,
+  "n_rejected_trip_length": 0,
+  "n_rejected_diagonal": 0,
+  "n_rejected_pairwise": 0,
+  "n_rejected_pool_exhausted": 0,
+  "mean_cell_entropy": 1.3468555843772272,
+  "mean_cell_cv": 2.0030727683264207,
+  "mean_pairwise_frobenius": 44313.86768508055,
+  "min_pairwise_frobenius": 35607.645935197725
+}

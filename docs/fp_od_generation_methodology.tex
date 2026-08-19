@@ -1,0 +1,597 @@
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{bbm}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{First-Principles Synthetic OD Generation\\[0.4em]
+\large Latent Gravity, Heavy Tails, and Constrained Sampling}
+\author{Implementation: \texttt{src/data/first\_principles/}, \texttt{generate\_fp\_od\_dataset.py}}
+\date{\today}
+
+\newcommand{\Tsyn}{\mathbf{T}^{\mathrm{syn}}}
+\newcommand{\Tsynk}[1]{\mathbf{T}^{\mathrm{syn},(#1)}}
+\newcommand{\mathbfu}{\mathbf{u}}
+\newcommand{\mathbfv}{\mathbf{v}}
+\newcommand{\mathbfS}{\mathbf{S}}
+\newcommand{\mathbfM}{\mathbf{M}}
+\newcommand{\mathbfp}{\mathbf{p}}
+\newcommand{\mathbfw}{\mathbf{w}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document specifies a \emph{first-principles} synthetic origin--destination (OD) generator that does \textbf{not} require a historical OD survey matrix. The process samples low-dimensional latent production and attraction factors, builds a gravity interaction kernel with distance decay and approximate reciprocity, applies Gamma heavy-tailed corridor weights, draws Dirichlet compositional noise, scales demand to a fixed total $G$, and balances marginals with iterative proportional fitting (IPF). Dataset-level quality filters enforce diversity, sparsity, and trip-length realism. The pipeline is implemented separately from the base-OD Dirichlet generator under \texttt{src/data/first\_principles/}. Turning counts reuse the existing Phase~2 assignment pipeline. We detail each stage, distributional choices, alternatives considered, and pros/cons.
+\end{abstract}
+
+\tableofcontents
+
+\chapter{Motivation and Problem Framing}
+\label{ch:fp-motivation}
+
+\section{Why first principles?}
+
+Machine-learning OD estimators need large labeled datasets. Two strategies exist:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Perturb a survey OD} (existing pipeline): Dirichlet around $T^{\mathrm{base}}+\varepsilon(d)$, then IPF.
+    \item \textbf{Synthesize from network geometry and latent demand} (this pipeline): no survey matrix required.
+\end{enumerate}
+
+The second strategy matches the problem statement in \texttt{od\_generation\_problem.pdf}: inputs are TAZs, distances, total demand $G$, and sample count $K$ only. It also forces the generator to encode transportation structure explicitly (gravity, reciprocity, latent land-use) rather than inheriting it from one observed table.
+
+\begin{table}[ht]
+\centering
+\caption{Existing vs.\ first-principles generators.}
+\label{tab:fp-compare}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.2cm}p{5.2cm}@{}}
+\toprule
+\textbf{Aspect} & \textbf{Base-OD pipeline} & \textbf{First-principles (this doc)} \\
+\midrule
+Primary prior & $T^{\mathrm{base}}+\varepsilon(d)$ & Latent $u_i v_j f(d_{ij})$ \\
+Needs survey OD? & Yes & No \\
+Corridor identity & Anchored near base & Varies with latents + Gamma \\
+Reciprocity & Implicit in base & Explicit mix toward $S^\top$ \\
+Spatial coherence & Via $\varepsilon$ + base & Spatial smoothing of $u,v$ \\
+Code path & \texttt{generate\_od\_dataset.py} & \texttt{generate\_fp\_od\_dataset.py} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Constraint philosophy}
+
+Not every constraint in the problem statement is a hard equality. We partition them as follows.
+
+\begin{table}[ht]
+\centering
+\caption{Hard vs.\ soft vs.\ dataset-level constraints.}
+\label{tab:fp-constraint-types}
+\small
+\begin{tabular}{@{}p{2.8cm}p{5.4cm}p{5.4cm}@{}}
+\toprule
+\textbf{Type} & \textbf{Constraints} & \textbf{Enforcement} \\
+\midrule
+Hard (per matrix) &
+$T_{ij}\ge 0$, $T_{ii}=0$, $\sum T=G$, $P$--$A$ consistency, connectivity support &
+Mask, scale, IPF \\
+Soft (distributional) &
+Distance decay, heavy tails, reciprocity, spatial coherence, corridor dominance, low-rank latent structure &
+Latent gravity + Gamma + Dirichlet \\
+Dataset-level &
+Diversity, entropy, stationarity, sparsity band, trip-length realism &
+Oversample + quality filters \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Trying to enforce reciprocity, freely varying corridors, and arbitrary asymmetric marginals as \emph{exact} hard constraints simultaneously is over-specified. Soft enforcement in expectation is the scientifically correct reading of the problem note.
+
+
+\chapter{End-to-End Process}
+\label{ch:fp-process}
+
+\section{Pipeline overview}
+
+\begin{figure}[ht]
+\centering
+\fbox{\begin{minipage}{0.94\linewidth}
+\small
+\textbf{First-principles OD pipeline}\\[0.4em]
+Zones + $d_{ij}$ + $G$
+$\xrightarrow{\mathrm{A}}$ latent $(\mathbfu,\mathbfv)$
+$\xrightarrow{\mathrm{B}}$ gravity $S_{ij}=u_i v_j f(d_{ij})$ + reciprocity
+$\xrightarrow{\mathrm{C}}$ Gamma weights
+$\xrightarrow{\mathrm{D}}$ Dirichlet
+$\xrightarrow{\mathrm{E}}$ scale + IPF
+$\xrightarrow{\mathrm{F}}$ quality filters
+$\to \{\Tsynk{k}\}$\\[0.35em]
+\textbf{Reuse Phase~2:} $\Tsynk{k}\to\mathbf{x}^{(k)}=\mathbf{A}_{\mathrm{turn}}\mathbf{y}^{(k)}$
+\end{minipage}}
+\caption{Stages A--F for OD synthesis; turning counts reuse the existing assignment pipeline.}
+\label{fig:fp-pipeline}
+\end{figure}
+
+\paragraph{Notation.}
+$N$ zones; $G$ total trips; $d_{ij}$ inter-zone distance; $\mathbfu,\mathbfv\in\mathbb{R}_+^N$ production/attraction propensities; $f(d)$ impedance; $\mathbfS$ gravity seed; $\alpha$ Dirichlet concentration; $a_\gamma,b_\gamma$ Gamma shape/scale; $\rho$ reciprocity mix.
+
+\section{Algorithm (one replicate)}
+
+\begin{figure}[ht]
+\centering
+\fbox{\begin{minipage}{0.94\linewidth}
+\small
+\textbf{Algorithm FP-1:} First-principles OD (one sample $k$)\\[0.35em]
+\begin{enumerate}[leftmargin=*, nosep]
+    \item Sample type intensities and zone memberships; form $\mathbfu^{(k)},\mathbfv^{(k)}$; spatially smooth
+    \item $S_{ij}\leftarrow u_i v_j f(d_{ij})$ on $i\neq j$; mix $S\leftarrow(1-\rho)S+\rho S^\top$
+    \item $w_{ij}\sim\mathrm{Gamma}(a_\gamma,b_\gamma)$; $S_{ij}\leftarrow w_{ij}S_{ij}$
+    \item $\mathbfp\sim\mathrm{Dir}(\alpha\,\mathrm{normalize}(\mathbfS))$
+    \item Seed $G\mathbfp$; targets $P\propto\mathbfu$, $A\propto\mathbfv$ (or equal shares); $\Tsyn\leftarrow\mathrm{IPF}(\cdot)$
+\end{enumerate}
+\end{minipage}}
+\caption{Single-matrix generator (\texttt{generate\_one\_fp\_od}).}
+\label{alg:fp1}
+\end{figure}
+
+
+\chapter{Stage A: Latent Production and Attraction Factors}
+\label{ch:fp-latent}
+
+\section{Model}
+
+Real OD tables are low-rank in spirit: a few land-use / activity types (residence, employment, retail, \ldots) drive zone importance. We therefore sample:
+
+\begin{enumerate}[leftmargin=*]
+    \item City-level type intensities $\boldsymbol{\pi}^{\mathrm{prod}},\boldsymbol{\pi}^{\mathrm{attr}}\in\mathbb{R}_+^{r}$,
+    \[
+      \pi^{\mathrm{prod}}_t,\ \pi^{\mathrm{attr}}_t \sim \mathrm{Gamma}(a_f,b_f).
+    \]
+    \item Soft zone--type memberships $\mathbfM\in\mathbb{R}^{N\times r}$ with rows on the simplex, obtained by placing $r$ random type centers in the plane and softmax-weighting zones by distance to centers.
+    \item Zone factors
+    \[
+      u_i = \sum_{t=1}^{r} M_{it}\,\pi^{\mathrm{prod}}_t, \qquad
+      v_j = \sum_{t=1}^{r} M_{jt}\,\pi^{\mathrm{attr}}_t.
+    \]
+\end{enumerate}
+
+\paragraph{Spatial coherence.}
+Nearby zones should not have wildly unrelated importance. We smooth
+\[
+  \mathbfu \leftarrow (1-s)\, \mathbfu + s\, \mathbf{K}\mathbfu,
+\]
+where $K_{ij}\propto\exp(-d_{ij}^2/(2\lambda_s^2))$ is a row-normalized Gaussian kernel, and likewise for $\mathbfv$. Strength $s\in[0,1]$ and length $\lambda_s$ are hyperparameters (defaults $s=0.5$, $\lambda_s=400\,\mathrm{m}$).
+
+\section{Why this design?}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Low-dimensional manifold:} the map $(M,\pi)\mapsto (u,v)\mapsto S$ has effective dimension $\ll N^2$, matching the problem note's latent-structure requirement.
+    \item \textbf{Interpretable:} $r$ plays the role of ``number of activity types.''
+    \item \textbf{No survey OD:} factors are drawn from the network geometry and random centers only.
+\end{itemize}
+
+\section{Alternatives considered}
+
+\begin{table}[ht]
+\centering
+\caption{Latent-factor alternatives: pros and cons.}
+\label{tab:fp-latent-pros}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.1cm}p{5.1cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+Independent $u_i,v_j\sim\mathrm{Gamma}$ &
+Simple &
+No spatial coherence; no shared types \\
+Low-rank $UV^\top$ Gaussian &
+Classic &
+Can be negative; weaker land-use story \\
+Fixed census attributes &
+Realistic if available &
+Requires external data (not first principles) \\
+Type centers + Gamma (ours) &
+Geometry-aware; low-dim; nonnegative &
+Center placement is stochastic; $r$ to tune \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Stage B: Gravity Kernel and Reciprocity}
+\label{ch:fp-gravity}
+
+\section{Gravity interaction}
+
+Given $\mathbfu,\mathbfv$ and impedance $f(d)$,
+\begin{equation}
+  S_{ij} = u_i\, v_j\, f(d_{ij})\, \mathbbm{1}[i\neq j].
+  \label{eq:fp-gravity}
+\end{equation}
+Supported impedance families:
+\begin{align}
+  f_{\mathrm{exp}}(d) &= \mathrm{e}^{-d/\lambda}, \\
+  f_{\mathrm{pow}}(d) &= (d+\varepsilon)^{-\gamma}.
+\end{align}
+Default: exponential with $\lambda=500\,\mathrm{m}$ (order of median Sioux Falls inter-zone distance).
+
+\paragraph{Why gravity?}
+It is the classical transportation interaction model: productions, attractions, and distance decay enter multiplicatively. In expectation, longer pairs receive less mass---the soft distance-decay constraint---while remaining strictly positive for finite $d$.
+
+\section{Approximate reciprocity}
+
+Daily demand is often roughly two-way. We mix
+\begin{equation}
+  S \leftarrow (1-\rho)\,S + \rho\, S^\top, \qquad \rho\in[0,0.5].
+  \label{eq:fp-reciprocity}
+\end{equation}
+Default $\rho=0.35$. This is \emph{not} hard symmetry: Gamma weights and Dirichlet noise later break exact equality $T_{ij}=T_{ji}$, preserving statistical reciprocity.
+
+\section{Alternatives}
+
+\begin{table}[ht]
+\centering
+\caption{Impedance and reciprocity alternatives.}
+\label{tab:fp-grav-pros}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.1cm}p{5.1cm}@{}}
+\toprule
+\textbf{Choice} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+Exponential $f$ &
+One length scale; smooth &
+Tail thinner than power law \\
+Power-law $f$ &
+Heavier long-distance mass &
+Sensitive near $d\approx 0$ \\
+Hard $T=T^\top$ &
+Perfect reciprocity &
+Conflicts with directed corridors / $P\neq A^\top$ patterns \\
+Soft mix $\rho$ (ours) &
+Tunable; compatible with IPF &
+$\rho$ is a knob \\
+No distance term &
+Maximal freedom &
+Violates soft distance decay \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Stage C: Heavy-Tailed Corridor Weights}
+\label{ch:fp-gamma}
+
+\section{Model}
+
+Gravity alone tends to be too smooth. Empirical OD cells are skewed. We reweight
+\begin{equation}
+  w_{ij}\sim\mathrm{Gamma}(a_\gamma,b_\gamma), \qquad
+  S_{ij}\leftarrow w_{ij} S_{ij}\quad (i\neq j),
+\end{equation}
+with density
+\begin{equation}
+  f(w)=\frac{1}{\Gamma(a_\gamma)b_\gamma^{a_\gamma}} w^{a_\gamma-1}\mathrm{e}^{-w/b_\gamma}.
+\end{equation}
+Default $a_\gamma=0.5<1$: density diverges as $w\to 0^+$ and retains a long right tail $\Rightarrow$ many tiny OD pairs, few dominant corridors. Corridor \emph{identity} changes every sample via independent draws---random corridor dominance.
+
+\section{Why Gamma?}
+
+\begin{table}[ht]
+\centering
+\caption{Heavy-tail mechanisms.}
+\label{tab:fp-gamma-pros}
+\small
+\begin{tabular}{@{}p{3.0cm}p{5.2cm}p{5.2cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+None &
+Stable &
+Over-smooth corridors \\
+Gamma $a<1$ (ours) &
+Positive; near-zero mass + long tail; simple &
+Extra $(a,b)$ \\
+LogNormal &
+Classic heavy tail &
+Weaker control near zero \\
+Pareto spikes &
+Extreme hubs &
+Can break IPF / trip-length filters \\
+Hard top-$k$ mask &
+Explicit sparsity &
+Discontinuous; less probabilistic \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Stage D: Dirichlet Compositional Noise}
+\label{ch:fp-dirichlet}
+
+\section{Model}
+
+After Stages B--C, normalize $\mathbfS$ to a probability matrix $\mathbfp^{\mathrm{prior}}$ on off-diagonal support and draw
+\begin{equation}
+  \tilde{\mathbfp} \sim \mathrm{Dirichlet}\!\bigl(\alpha\,\mathbfp^{\mathrm{prior}}_{\mathcal{S}}\bigr).
+\end{equation}
+Mean $\mathbb{E}[\tilde{p}]=\mathbfp^{\mathrm{prior}}$; coordinate variance scales as $1/(\alpha+1)$. Default $\alpha=200$ (somewhat more diverse than the base-OD pipeline's $\alpha=500$, because the gravity skeleton already carries structure).
+
+\paragraph{Why Dirichlet?}
+Trip tables are compositional under fixed $G$. The Dirichlet is the natural distribution on the simplex. Independent Gaussian cell noise would violate the simplex or require awkward renormalization.
+
+\begin{table}[ht]
+\centering
+\caption{Compositional noise alternatives.}
+\label{tab:fp-dir-pros}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.1cm}p{5.1cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+Dirichlet (ours) &
+Simplex-correct; one knob $\alpha$ &
+Alone is not enough for extreme skew (hence Gamma) \\
+Logistic-Normal &
+Flexible correlations &
+Heavier; harder to tune \\
+No compositional noise &
+Pure gravity+Gamma &
+Less fine-grained diversity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Stage E: Scaling and IPF}
+\label{ch:fp-ipf}
+
+\section{Hard constraints}
+
+Set seed $X_{ij}=G\,\tilde{p}_{ij}$ (plus a tiny floor on support for IPF stability). Marginal targets:
+\begin{equation}
+  P_i = G\,\frac{u_i}{\sum_{i'}u_{i'}}, \qquad
+  A_j = G\,\frac{v_j}{\sum_{j'}v_{j'}},
+\end{equation}
+or equal shares if \texttt{--equal-marginals}. IPF (Furness) alternates row/column scaling until marginal error $<\tau$ or $t_{\max}$ iterations. Post-process: zero diagonal and off-support.
+
+This enforces:
+\begin{itemize}[nosep]
+    \item nonnegativity (up to numerical tolerance),
+    \item $T_{ii}=0$,
+    \item $\sum_{i,j}T_{ij}=G$ (to numerical accuracy),
+    \item $P$--$A$ consistency with the chosen targets,
+    \item connectivity support (full off-diagonal for connected zoning systems such as Sioux Falls).
+\end{itemize}
+
+\begin{table}[ht]
+\centering
+\caption{Balancing alternatives.}
+\label{tab:fp-ipf-pros}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.1cm}p{5.1cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+IPF / Furness (ours) &
+Fast; classical; scalable to $10^6$ &
+Needs feasible targets \\
+Entropy maximization &
+Nice dual &
+Heavier per sample \\
+No balancing &
+Cheap &
+Inconsistent zone totals \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Stage F: Dataset Quality Filters}
+\label{ch:fp-filters}
+
+\section{Procedure}
+
+Generate a candidate pool of size $\lceil\kappa K\rceil$ (default $\kappa=2$), then accept $K$ matrices using the shared module \texttt{quality\_filters.py}:
+
+\begin{itemize}[leftmargin=*]
+    \item sparsity band;
+    \item trip-length relative error vs.\ a \emph{reference} gravity OD (deterministic latent draw, no Gamma/Dirichlet);
+    \item optional correlation band vs.\ that reference (defaults wide: disabled);
+    \item entropy-oriented ranking;
+    \item pairwise Frobenius diversity (reservoir approximation for scalability).
+\end{itemize}
+
+The reference OD is \textbf{not} a survey matrix; it is an internal gravity template used only for filter geometry checks.
+
+\begin{table}[ht]
+\centering
+\caption{Filter design choices.}
+\label{tab:fp-filt-pros}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.1cm}p{5.1cm}@{}}
+\toprule
+\textbf{Choice} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+Filters on (ours) &
+Diversity + realism gates &
+Needs oversampling; thresholds \\
+No filters &
+Maximum throughput &
+Near-duplicates possible \\
+Correlate vs.\ survey OD &
+Anchors to reality &
+Contradicts first-principles inputs \\
+Correlate vs.\ gravity ref &
+Geometry-aware without survey &
+Reference is itself synthetic \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Why This Process Makes Sense}
+\label{ch:fp-why}
+
+\section{Mapping to the problem constraints}
+
+\begin{table}[ht]
+\centering
+\caption{Constraint coverage map.}
+\label{tab:fp-coverage}
+\small
+\begin{tabular}{@{}p{4.2cm}p{9.0cm}@{}}
+\toprule
+\textbf{Constraint} & \textbf{Where enforced} \\
+\midrule
+Nonnegativity / no intrazonal & Support mask + IPF post-process \\
+Fixed total $G$ / $P$--$A$ & Scale + IPF \\
+Distance decay & Gravity $f(d)$ (soft, in expectation) \\
+Heavy tails / corridor dominance & Gamma weights (vary by sample) \\
+Approximate reciprocity & Soft mix $\rho$ toward $S^\top$ \\
+Spatial coherence & Spatial smoothing of $u,v$ \\
+Smooth O/D importance & Latent factors $u,v$ \\
+Diversity / entropy & Dirichlet $\alpha$ + quality filters \\
+Sparsity & Gamma + sparsity filter band \\
+Connectivity & Off-diagonal / connected support \\
+Stationarity & Shared process + filters \\
+Low-dimensional latent structure & Rank-$r$ type model \\
+Scalability & Multiprocessing + vectorized filters \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Scientific rationale}
+
+The generator is a \emph{hierarchical probabilistic model}:
+\[
+  (\mathbfu,\mathbfv)
+  \to \mathbfS_{\mathrm{grav}}
+  \to \mathbfS_{\mathrm{heavy}}
+  \to \mathbfp
+  \to \mathbf{T}=\mathrm{IPF}(G\mathbfp).
+\]
+Each arrow adds a transportation mechanism that the ML inverse problem should eventually recover from turning counts. Because structure is injected by geometry and latents---not by cloning a single survey---the dataset explores a realistic manifold of OD tables while remaining on-policy for the problem statement.
+
+
+\chapter{Implementation and Usage}
+\label{ch:fp-impl}
+
+\section{Module layout}
+
+\begin{table}[ht]
+\centering
+\caption{Code map (\texttt{src/data/first\_principles/}).}
+\label{tab:fp-code}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Module} & \textbf{Role} \\
+\midrule
+\texttt{config.py} & \texttt{FPGeneratorConfig} \\
+\texttt{latent.py} & Stage A: types, memberships, spatial smooth \\
+\texttt{gravity.py} & Stage B: impedance, gravity, reciprocity \\
+\texttt{heavy\_tails.py} & Stage C: Gamma weights \\
+\texttt{compositional.py} & Stage D: Dirichlet \\
+\texttt{generator.py} & Stages A--E + parallel batch \\
+\texttt{generate\_fp\_od\_dataset.py} & CLI + Stage F filters + I/O \\
+\midrule
+\texttt{generate\_turning\_counts.py} & Existing Phase~2 (unchanged) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The legacy pipeline under \texttt{generate\_od\_dataset.py} is untouched.
+
+\section{Example commands}
+
+\paragraph{Generate OD matrices.}
+\begin{verbatim}
+python -m src.data.generate_fp_od_dataset \
+  --samples 100000 --oversample-factor 2 \
+  --total-demand 365475 --latent-dim 4 \
+  --alpha 200 --reciprocity 0.35 \
+  --gamma-shape 0.5 --lambda-decay 500 \
+  --output-dir outputs/od_generator_fp \
+  --output-name synthetic_od_fp.npy \
+  --memmap-save
+\end{verbatim}
+
+\paragraph{Turning counts (existing pipeline).}
+\begin{verbatim}
+python -m src.data.generate_turning_counts \
+  --network sioux-falls.net.xml \
+  --od outputs/od_generator_fp/synthetic_od_fp.npy \
+  --output-dir outputs/turning_counts_fp \
+  --skip-plots
+\end{verbatim}
+
+\section{Default hyperparameters}
+
+\begin{table}[ht]
+\centering
+\caption{Recommended defaults (Sioux Falls scale).}
+\label{tab:fp-defaults}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Symbol / flag} & \textbf{Default} & \textbf{Role} \\
+\midrule
+$G$ / \texttt{--total-demand} & $365475$ & Fixed trip total \\
+$r$ / \texttt{--latent-dim} & $4$ & Activity types \\
+$\lambda$ / \texttt{--lambda-decay} & $500$ & Distance decay length (m) \\
+$\rho$ / \texttt{--reciprocity} & $0.35$ & Symmetry mix \\
+$a_\gamma$ / \texttt{--gamma-shape} & $0.5$ & Heavy-tail shape \\
+$\alpha$ / \texttt{--alpha} & $200$ & Dirichlet concentration \\
+$\kappa$ / \texttt{--oversample-factor} & $2$ & Filter pool size \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\chapter{Limitations and Future Work}
+\label{ch:fp-limits}
+
+\begin{itemize}[leftmargin=*]
+    \item Membership centers are geometric proxies, not calibrated land-use layers.
+    \item Reciprocity is a linear mix, not a structural home--work matching model.
+    \item Connectivity currently uses full off-diagonal support (valid for fully connected zone systems); sparse network cut-sets could be added.
+    \item Hyperparameters $(r,\lambda,\rho,\alpha,a_\gamma)$ still need network-specific calibration via held-out realism metrics.
+    \item Optional: replace Euclidean $d_{ij}$ with network shortest-path costs for impedance.
+\end{itemize}
+
+\chapter*{Conclusion}
+\addcontentsline{toc}{chapter}{Conclusion}
+
+The first-principles pipeline generates OD matrices from zones, distances, and total demand alone by combining latent land-use factors, gravity interaction, Gamma corridor noise, Dirichlet compositional sampling, IPF balancing, and dataset filters. Each stage targets a subset of the constraints in \texttt{od\_generation\_problem.pdf}. The implementation lives beside---not instead of---the existing base-OD generator, and turning counts reuse Phase~2 unchanged.
+
+\begin{thebibliography}{9}
+\bibitem{ortuzar2011}
+J.~de~D.~Ort\'{u}zar and L.~G.~Willumsen,
+\emph{Modelling Transport}, 4th ed., Wiley, 2011.
+
+\bibitem{furness1962}
+R.~Furness, \emph{Trip forecasting}, Traffic Engineering and Control, 1962.
+
+\bibitem{wilson1970}
+A.~G.~Wilson,
+\emph{Entropy in Urban and Regional Modelling}, Pion, 1970.
+
+\bibitem{cascetta1984}
+E.~Cascetta,
+\emph{Estimation of trip matrices from traffic counts and survey data},
+Transportation Research Part~B, 1984.
+\end{thebibliography}
+
+\end{document}
