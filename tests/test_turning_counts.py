@@ -11,6 +11,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src import NETWORK_PATH
 from src.data.fractional_assignment import (
     build_fractional_assignment_matrix,
     validate_fractional_matrix,
@@ -23,7 +24,7 @@ from src.data.route_choice import apply_logit_choice, logit_route_probabilities
 from src.data.statistics import generate_turning_counts
 from src.data.turning_movements import enumerate_turning_movements
 
-NET_PATH = PROJECT_ROOT / "sioux-falls.net.xml"
+NET_PATH = NETWORK_PATH
 
 
 @pytest.fixture(scope="module")

@@ -18,6 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src import BASE_OD_PATH, OUTPUT_DIR
 from src.data.dataset_evaluation import (
     create_evaluation_figures,
     evaluate_dataset,
@@ -35,7 +36,7 @@ from src.data.quality_filters import QualityFilterConfig, filter_candidate_pool
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "od_generator"
+DEFAULT_OUTPUT_DIR = OUTPUT_DIR / "od_generator"
 LARGE_DATASET_THRESHOLD = 100_000
 
 
@@ -324,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input",
         type=str,
-        default=str(PROJECT_ROOT / "EstimatedODMatrix.npy"),
+        default=str(BASE_OD_PATH),
         help="Path to base OD matrix (.npy)",
     )
     parser.add_argument(

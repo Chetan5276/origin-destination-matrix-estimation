@@ -11,6 +11,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src import NETWORK_PATH
 from src.data.build_assignment_matrix import build_assignment_matrix
 from src.data.network_parser import parse_sumo_network
 from src.data.od_pairs import OdPairIndex, flatten_od_matrix, unflatten_od_vector
@@ -18,7 +19,7 @@ from src.data.route_assignment import assign_routes
 from src.data.statistics import build_dataset, generate_turning_counts, validate_dataset
 from src.data.turning_movements import enumerate_turning_movements
 
-NET_PATH = PROJECT_ROOT / "data" / "sioux-falls.net.xml"
+NET_PATH = NETWORK_PATH
 
 
 @pytest.fixture(scope="module")

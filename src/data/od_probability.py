@@ -8,14 +8,14 @@ from pathlib import Path
 
 import numpy as np
 
-from src import NUM_ZONES, PROJECT_ROOT
+from src import NETWORK_PATH, NUM_ZONES
 
 logger = logging.getLogger(__name__)
 
 # Gravity-style prior: ε_ij = β exp(-d_ij / λ)
 DEFAULT_EPSILON_BETA = 1.0
 DEFAULT_EPSILON_LAMBDA = 500.0  # ≈ median inter-zone Euclidean distance (meters)
-DEFAULT_NETWORK_PATH = PROJECT_ROOT / "sioux-falls.net.xml"
+DEFAULT_NETWORK_PATH = NETWORK_PATH
 _DISTANCE_CACHE: dict[str, np.ndarray] = {}
 
 

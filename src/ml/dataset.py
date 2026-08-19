@@ -10,7 +10,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-from src import NUM_OD_PAIRS, NUM_ZONES, PROJECT_ROOT
+from src import BASE_OD_PATH, NUM_OD_PAIRS, NUM_ZONES
 from src.data.statistics import flatten_od_batch
 from src.ml.od_constraints import base_support_mask
 
@@ -49,7 +49,7 @@ class ODDataset:
 
 def load_base_od(path: Path | None = None) -> np.ndarray:
     """Load base OD matrix (24, 24)."""
-    path = path or (PROJECT_ROOT / "EstimatedODMatrix.npy")
+    path = path or BASE_OD_PATH
     od = np.load(path).astype(np.float32)
     np.fill_diagonal(od, 0.0)
     return od

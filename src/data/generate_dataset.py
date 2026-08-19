@@ -13,11 +13,11 @@ from pathlib import Path
 import numpy as np
 
 # Ensure project root is importable when run as a script.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src import DATA_DIR, OUTPUT_DIR, REPORT_DIR
+from src import NETWORK_PATH, OUTPUT_DIR, REPORT_DIR
 from src.data.build_assignment_matrix import build_assignment_matrix
 from src.data.network_parser import parse_sumo_network
 from src.data.od_pairs import OdPairIndex
@@ -256,13 +256,13 @@ def main() -> None:
     parser.add_argument(
         "--net",
         type=Path,
-        default=DATA_DIR / "sioux-falls.net.xml",
+        default=NETWORK_PATH,
         help="Path to SUMO network file",
     )
     parser.add_argument(
         "--od",
         type=Path,
-        default=DATA_DIR / "synthetic_od_100000.npy",
+        default=OUTPUT_DIR / "od_generator_100k" / "synthetic_od_100k.npy",
         help="Path to synthetic OD matrices (N, 24, 24)",
     )
     parser.add_argument(

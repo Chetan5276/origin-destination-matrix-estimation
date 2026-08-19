@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src import NUM_ZONES, OUTPUT_DIR
+from src import NETWORK_PATH, NUM_ZONES, OUTPUT_DIR
 from src.data.first_principles import (
     FPGeneratorConfig,
     build_reference_od,
@@ -82,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-trip-length-rel-error", type=float, default=0.50)
     p.add_argument("--min-frobenius-distance", type=float, default=0.0)
     p.add_argument("--auto-frobenius-fraction", type=float, default=0.25)
-    p.add_argument("--network", type=str, default=str(PROJECT_ROOT / "sioux-falls.net.xml"))
+    p.add_argument("--network", type=str, default=str(NETWORK_PATH))
     p.add_argument("-v", "--verbose", action="store_true")
     return p
 

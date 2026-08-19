@@ -14,11 +14,11 @@ from pathlib import Path
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src import DATA_DIR, OUTPUT_DIR, REPORT_DIR
+from src import NETWORK_PATH, OUTPUT_DIR, REPORT_DIR
 from src.data.assignment_rank import compare_assignment_matrices, extended_rank_analysis
 from src.data.build_assignment_matrix import build_assignment_matrix
 from src.data.fractional_assignment import (
@@ -321,7 +321,7 @@ def main() -> None:
     parser.add_argument(
         "--network",
         type=Path,
-        default=PROJECT_ROOT / "sioux-falls.net.xml",
+        default=NETWORK_PATH,
         help="Path to SUMO network file",
     )
     parser.add_argument(

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from src import PROJECT_ROOT
+from src import NETWORK_PATH
 from src.data.first_principles.compositional import dirichlet_reweight, seed_to_probability
 from src.data.first_principles.config import FPGeneratorConfig
 from src.data.first_principles.gravity import build_gravity_matrix
@@ -23,7 +23,7 @@ from src.data.od_probability import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_NETWORK_PATH = PROJECT_ROOT / "sioux-falls.net.xml"
+DEFAULT_NETWORK_PATH = NETWORK_PATH
 _WORKER: dict | None = None
 
 

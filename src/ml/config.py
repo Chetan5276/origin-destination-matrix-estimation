@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from src import NUM_OD_PAIRS, OUTPUT_DIR, PROJECT_ROOT, REPORT_DIR
+from src import NUM_OD_PAIRS, OUTPUT_DIR, REPORT_DIR
 
 ML_OUTPUT_DIR = OUTPUT_DIR / "ml"
 ML_REPORT_DIR = REPORT_DIR / "ml"

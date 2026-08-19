@@ -1,9 +1,0 @@
-{
-  "od_file": "outputs/od_generator_fp/synthetic_od_fp.npy",
-  "n_matrices": 100001,
-  "n_synthetic": 100000,
-  "original_od_index": 100000,
-  "original_od_source": "EstimatedODMatrix.npy",
-  "original_od_total_demand": 365475.03125,
-  "pipeline": "first_principles"
-}

@@ -11,6 +11,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src import BASE_OD_PATH
 from src.data.dirichlet_sampler import reconstruct_demand, sample_dirichlet_probability
 from src.data.ipf import ipf
 from src.data.marginal_perturbation import perturb_marginals
@@ -29,8 +30,6 @@ from src.data.od_probability import (
     full_off_diagonal_support,
     zone_distance_matrix,
 )
-
-BASE_OD_PATH = PROJECT_ROOT / "EstimatedODMatrix.npy"
 
 
 @pytest.fixture(scope="module")

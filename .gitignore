@@ -40,16 +40,16 @@ docs/*.synctex.gz
 Thumbs.db
 .~lock.*
 
-# Generated datasets and model artifacts (kept locally; not in git)
+# Generated pipeline artifacts (local only)
+outputs/*
+!outputs/README.md
+report/
+
+# Model / array binaries
 *.npy
-!EstimatedODMatrix.npy
+!data/EstimatedODMatrix.npy
 *.pkl
 *.pt
 *.pth
 *.ckpt
 *.h5
-outputs/**/*.npy
-outputs/**/*.pkl
-outputs/ml_neural/models/
-outputs/ml_neural/figures/
-outputs/od_generator/figures/
