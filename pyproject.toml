@@ -22,6 +22,8 @@ dependencies = [
     "torch>=1.10",
     "tqdm>=4.64",
     "shap>=0.41",
+    "optuna>=3.0",
+    "joblib>=1.2",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +35,7 @@ generate-fp-od-dataset = "src.data.generate_fp_od_dataset:main"
 generate-turning-counts = "src.data.generate_turning_counts:main"
 generate-od-turning-dataset = "src.data.generate_dataset:main"
 train-od-estimator = "src.ml.train_od_estimator:main"
+rigorous-od-benchmark = "src.ml.rigorous_benchmark.run:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,10 @@
+{
+  "survey_od_mae_moore_penrose": 444.1401393069253,
+  "survey_od_mae_nullspace_mlp": 395.1148329629866,
+  "norm_y_ns_minus_Aplus_x": 11685.562729840554,
+  "norm_y_ns_minus_y_pinv": 11648.343245213417,
+  "norm_A_times_y_ns_minus_y_pinv": 4994.655938444479,
+  "rel_nullspace_leak_via_A": 0.08757339452821894,
+  "mean_abs_null_component_cell": 276.9883164838161,
+  "note": "Computed from survey_inference/*_od.npy and operator/a_pinv.npy; no checkpoint restore."
+}

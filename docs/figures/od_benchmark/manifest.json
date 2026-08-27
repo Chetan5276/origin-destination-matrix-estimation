@@ -1,0 +1,30 @@
+{
+  "n_figures": 24,
+  "figures": [
+    "docs/figures/od_benchmark/test_od_mae.png",
+    "docs/figures/od_benchmark/test_forward_rmse.png",
+    "docs/figures/od_benchmark/test_pearson.png",
+    "docs/figures/od_benchmark/test_production_mae.png",
+    "docs/figures/od_benchmark/test_attraction_mae.png",
+    "docs/figures/od_benchmark/test_od_vs_forward.png",
+    "docs/figures/od_benchmark/survey_od_mae.png",
+    "docs/figures/od_benchmark/survey_forward_rmse.png",
+    "docs/figures/od_benchmark/survey_od_vs_forward.png",
+    "docs/figures/od_benchmark/survey_heatmap_moore_penrose.png",
+    "docs/figures/od_benchmark/survey_heatmap_tikhonov.png",
+    "docs/figures/od_benchmark/survey_heatmap_physics_residual_mlp.png",
+    "docs/figures/od_benchmark/survey_heatmap_ae_64_finetune.png",
+    "docs/figures/od_benchmark/survey_heatmap_nullspace_mlp.png",
+    "docs/figures/od_benchmark/synthetic_heatmap_moore_penrose.png",
+    "docs/figures/od_benchmark/synthetic_heatmap_tikhonov.png",
+    "docs/figures/od_benchmark/synthetic_heatmap_physics_residual_mlp.png",
+    "docs/figures/od_benchmark/synthetic_heatmap_ae_64_finetune.png",
+    "docs/figures/od_benchmark/synthetic_heatmap_nullspace_mlp.png",
+    "docs/figures/od_benchmark/nullspace_diagnostics.png",
+    "docs/figures/od_benchmark/nullspace_correction_heatmap.png",
+    "docs/figures/od_benchmark/benchmark_report_test_od_mae.png",
+    "docs/figures/od_benchmark/benchmark_report_test_forward.png",
+    "docs/figures/od_benchmark/benchmark_report_od_vs_forward.png"
+  ],
+  "benchmark_dir": "/home/chetan/repos/origin-destination-matrix-estimation/outputs/benchmark"
+}
